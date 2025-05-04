@@ -14,4 +14,14 @@ router.get('/' , authMiddleware, async(req,res) => {
     }
 })
 
+router.patch('/:id/read', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await Notification.findByIdAndUpdate(id, { read: true });
+      res.send('Notification marked as read');
+    } catch (error) {
+      res.status(500).send('Error updating notification');
+    }
+  });
+
 export default router

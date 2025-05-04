@@ -23,7 +23,7 @@ const buildFilters = (reqQuery) => {
     filter.priority = { $regex: `^${reqQuery.priority}$`, $options: "i" };
   }
 
-  console.log("🔍 Final Filter Applied:", JSON.stringify(filter, null, 2));
+  // console.log("🔍 Final Filter Applied:", JSON.stringify(filter, null, 2));
   return filter;
 };
 
@@ -66,6 +66,13 @@ router.post("/", authMiddleware, async (req, res) => {
         message: `A new task "${task.title}" was assigned to you!`,
       });
     }
+
+    const io = req.app.get("io"); // make sure to expose io globally
+    console.log(`Emitting notification to ${assignedTo}`);
+
+  io.to(assignedTo).emit("new-notification", {
+    message: `A new task "${title}" has been assigned to you.`,
+  });
 
     res.status(201).json(task);
   } catch (err) {
