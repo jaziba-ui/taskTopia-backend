@@ -25,7 +25,7 @@ const connectedUsers = {}
 const server = createServer(app)
 const io = new SocketIoServer(server, {
     cors: {
-        origin: "*",
+        origin: "https://task-topia-frontend.vercel.app/",
         methods: ["GET", "POST"]
     }
 })
@@ -58,5 +58,5 @@ app.use('/api/users', userRoutes)
 app.use("/admin", adminRoutes)
 app.set('io', io)
 
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 8080
 server.listen(PORT, () => console.log(`Server running on ${PORT}`));
