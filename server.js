@@ -9,6 +9,7 @@ import taskRoutes from './routes/task.js'
 import authRoutes from './routes/auth.js'
 import notificationRoutes from './routes/notification.js'
 import userRoutes from './routes/user.js'
+import adminRoutes from './routes/admin.js'
 
 const app = express();
 
@@ -31,6 +32,7 @@ const io = new SocketIoServer(server, {
 
 io.on('connection', (socket) => {
     console.log("User connected with socket ID:", socket.id);
+    
 
     socket.on("register", (userId) => {
         console.log("Registered users: ", userId)
@@ -53,6 +55,7 @@ app.use("/api/auth", authRoutes)
 app.use("/api/tasks", taskRoutes)
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes)
+app.use("/admin", adminRoutes)
 app.set('io', io)
 
 const PORT = process.env.PORT || 5000

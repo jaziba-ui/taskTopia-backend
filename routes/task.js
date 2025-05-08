@@ -2,8 +2,19 @@ import express from "express";
 import Task from "../models/Task.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import Notification from '../models/Notification.js'
+import { getAssignedTasks } from "../controller/taskController.js";
 
 const router = express.Router();
+
+const authorizeRole = (roles) => {
+  return (req,res,next) => {
+    console.log("User Role:", req.user.role)
+    if(!roles.includes(req.user.role)){
+      return res.status(403).send("Access denied")
+    }
+    next()
+  }
+}
 
 const buildFilters = (reqQuery) => {
   const filter = {};
@@ -27,10 +38,9 @@ const buildFilters = (reqQuery) => {
   return filter;
 };
 
-
-
 // Create Task
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", authMiddleware, authorizeRole(['admin' , 'manager']),
+  async (req, res) => {
   const { title, description, dueDate, priority, assignedTo } = req.body;
 
   console.log("Request Body:", req.body);
@@ -81,7 +91,8 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 // Get Created Tasks
-router.get("/created-tasks", authMiddleware, async (req, res) => {
+router.get("/created-tasks",authMiddleware, authorizeRole(['admin' , 'manager']),
+   async (req, res) => {
   try {
     const baseFilter = { createdBy: req.user.id };
     const queryFilters = buildFilters(req.query);
@@ -89,56 +100,35 @@ router.get("/created-tasks", authMiddleware, async (req, res) => {
 
     const createdTasks = await Task.find(finalFilter).populate("createdBy assignedTo");
 
+    // console.log("Created Task:", createdTasks);
+
     res.json({ tasks: createdTasks });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+router.get("/assigned-tasks", authMiddleware, getAssignedTasks);
 
-// Get Assigned Tasks
-router.get("/assigned-tasks", authMiddleware, async (req, res) => {
-  try {
-    const baseFilter = {
-      assignedTo: req.user.id,
-      createdBy: { $ne: req.user.id },
-    };
-    const queryFilters = buildFilters(req.query);
-    const finalFilter = { ...baseFilter, ...queryFilters };
+// router.get('/overdue-tasks', authMiddleware, async (req, res) => {
+//   try {
+//     const now = new Date();
 
-    const assignedTasks = await Task.find(finalFilter).populate("createdBy assignedTo");
+//     const overdueTasks = await Task.find({
+//       dueDate: { $lt: now },
+//       status: { $ne: 'completed' } // optional condition
+//     });
 
-    res.json({ tasks: assignedTasks });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-// Get Overdue Tasks
-router.get("/overdue-tasks", authMiddleware, async (req, res) => {
-  try {
-    const baseFilter = {
-      assignedTo: req.user.id,
-      dueDate: { $lt: new Date() },
-      status: { $ne: "Completed" },
-    };
-    const queryFilters = buildFilters(req.query);
-    const finalFilter = { ...baseFilter, ...queryFilters };
-
-    const overdueTasks = await Task.find(finalFilter).populate("createdBy assignedTo");
-
-    res.json({ tasks: overdueTasks });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
+//     res.status(200).json(overdueTasks);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error fetching overdue tasks' });
+//   }
+// });
 
 
 // Update Task
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, authorizeRole(['admin' , 'manager']),
+  async (req, res) => {
   try {
     const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -168,7 +158,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Unauthorized action" });
     }
 
-    await task.deleteOne(); // ✅ This actually deletes the task from DB
+    await task.deleteOne(); 
 
     res.json({ message: "Task deleted" });
   } catch (err) {
@@ -177,7 +167,8 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 });
 
 
-router.patch("/:id/assign", authMiddleware, async (req, res) => {
+router.patch("/:id/assign", authMiddleware, authorizeRole(['admin' , 'manager']),
+  async (req, res) => {
   try {
     const { assignedTo } = req.body;
 
@@ -187,11 +178,27 @@ router.patch("/:id/assign", authMiddleware, async (req, res) => {
       { new: true }
     ).populate("assignedTo", "name email");
     if (!task) return res.status(404).json({ error: "Task not found!" });
+    console.log("Assigned To (ID):", assignedTo, typeof assignedTo);
 
-    await Notification.create({
-      user: assignedTo,
-      message: `A new task ${task.title} was assigned to you!`,
-    });
+    // Notification for newly created task
+if (assignedTo) {
+  await Notification.create({
+    user: assignedTo,
+    message: `A new task "${task.title}" was assigned to you!`,
+  });
+
+  const io = req.app.get("io");
+  console.log(`Emitting notification to ${assignedTo}`);
+
+  io.to(assignedTo).emit("new-notification", {
+    message: `A new task "${title}" has been assigned to you.`,
+  });
+}
+
+
+console.log("Assigned to:", assignedTo);
+    console.log('Notification sent:', task, user);  
+
 
     res.json(task);
   } catch (error) {
